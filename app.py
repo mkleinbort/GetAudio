@@ -11,7 +11,9 @@ import base64
 FOLDER_DEFAULT  = 'user_recordings'
 SAMPLES_DEFAULT = 2
 
-def record(filename):
+p = pyaudio.PyAudio()  # Create an interface to PortAudio
+
+def record(filename, p=p):
     # KWARGs
     chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
@@ -19,7 +21,6 @@ def record(filename):
     fs = 16_000  # Record at 44100 samples per second
     seconds=1
     
-    p = pyaudio.PyAudio()  # Create an interface to PortAudio
     stream = p.open(format=sample_format,
                         channels=2,
                         rate=fs,
