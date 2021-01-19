@@ -8,12 +8,10 @@ from glob import glob
 import shutil
 import base64
 
-FOLDER_DEFAULT  = 'user_recordings'
-SAMPLES_DEFAULT = 2
+FOLDER  = 'user_recordings'
+SAMPLES = 2
 
-p = pyaudio.PyAudio()  # Create an interface to PortAudio
-
-def record(filename, p=p):
+def record(filename):
     # KWARGs
     chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
@@ -21,12 +19,17 @@ def record(filename, p=p):
     fs = 16_000  # Record at 44100 samples per second
     seconds=1
     
+    p = pyaudio.PyAudio()  # Create an interface to PortAudio
+
+    print('A')
+
     stream = p.open(format=sample_format,
                         channels=2,
                         rate=fs,
                         frames_per_buffer=chunk,
                         input=True)
 
+    print("B")
     frames = []  # Initialize array to store frames
 
     # Store data in chunks
@@ -40,6 +43,7 @@ def record(filename, p=p):
     # Terminate the PortAudio interface
     #p.terminate()
 
+    print('X')
     # Save the recorded data as a WAV file
     wf = wave.open(filename, 'wb')
     wf.setnchannels(channels)
@@ -53,13 +57,11 @@ st.title('Help us gather audio data!')
 st.write('''We are trying to build a model that can idenify what letter of the alphabet was said
 by a speaker. Please help us gather some labeled data by recording yourself saying some letters.''')
 
-
 st.markdown('### Instructions')
-st.write(f'When you press record, you will be asked to say each letter {SAMPLES_DEFAULT}+ times')
+st.write(f'When you press record, you will be asked to say each letter {SAMPLES} times')
 st.write('Note that we are looking for the pronunciation of the letter, not the name.')
 
-FOLDER = st.text_input('Please give this dataset an identifier', value=FOLDER_DEFAULT)
-SAMPLES = st.number_input('How many samples are you willing to record?', value=SAMPLES_DEFAULT, step=None,)
+FOLDER = st.text_input('Please give this dataset an identifier')
 
 button_cols = st.beta_columns(6)
 
@@ -124,7 +126,6 @@ if download:
 
     file =  sorted(glob(f'{FOLDER}-*.zip'))[-1]
     st.markdown(get_download_link(file), unsafe_allow_html=True)
-
 
 
 
