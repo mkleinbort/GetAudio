@@ -1,84 +1,123 @@
 import streamlit as st
+import pyaudio
+import time
+import os
+import wave
+import string
+from glob import glob
+import shutil
+import base64
 
-import numpy as np
-import pandas as pd
-from dataclasses import dataclass
-from scipy import stats, optimize, interpolate
+FOLDER  = 'user_recordings'
+SAMPLES = 2
 
-@dataclass
-class Distribution:
-    sex: str
-    age: float
+def record(filename):
+    # KWARGs
+    chunk = 1024  # Record in chunks of 1024 samples
+    sample_format = pyaudio.paInt16  # 16 bits per sample
+    channels = 2
+    fs = 16_000  # Record at 44100 samples per second
+    seconds=1
     
-    mean: float
-    std: float
-    
-    givens: dict
-        
-    def to_z_score(self, num):
-        return (num-self.mean)/self.std
-    
-    def to_percentile(self, num):
-        
-        z_score = self.to_z_score(num)
-        return 1 - stats.norm.sf(z_score)
-    
-    def __hash__(self):
-        return f'{self.age, self.sex, self.mean, self.std}'
-        
-def load_data(file='zwtageinf.xls'):
-    return pd.read_excel(file).loc[lambda x: x['Sex'] != 'Sex'].astype(float)
+    p = pyaudio.PyAudio()  # Create an interface to PortAudio
+    stream = p.open(format=sample_format,
+                        channels=2,
+                        rate=fs,
+                        frames_per_buffer=chunk,
+                        input=True)
 
-def add_null_rows(df):
-    nans = np.where(np.empty_like(df.values), np.nan, np.nan)
-    data = np.hstack([nans, df.values]).reshape(-1, df.shape[1])
-    return pd.DataFrame(data, columns=df.columns)
-    
-def interpolate_values(df):
-    return df.interpolate(method='polynomial', order=1)
+    frames = []  # Initialize array to store frames
 
-def row_to_dist(x):
-    return Distribution(sex=x['Sex'], 
-                        age=x['Agemos'], 
-                        mean=x[0], 
-                        std=x[1]-x[0], givens=x.to_dict())
+    # Store data in chunks
+    for i in range(0, int(fs / chunk * seconds)):
+        data = stream.read(chunk)
+        frames.append(data)
 
-def add_dist(df):
-    return df.assign(Dist = lambda x: x.apply(lambda row: row_to_dist(row), axis=1))
+    # Stop and close the stream 
+    #stream.stop_stream()
+    stream.close()
+    # Terminate the PortAudio interface
+    #p.terminate()
 
-@st.cache(allow_output_mutation=True)
-def init_data():
-    df = (
-        load_data()
-        .pipe(add_null_rows).pipe(interpolate_values).dropna()
-        .pipe(add_null_rows).pipe(interpolate_values).dropna()
-        .replace(to_replace={'Sex':{1.0:'Male', 2.0:'Female'}})
-        .pipe(add_dist)
-        .set_index(['Sex', 'Agemos'])
-    )
-    return df
+    # Save the recorded data as a WAV file
+    wf = wave.open(filename, 'wb')
+    wf.setnchannels(channels)
+    wf.setsampwidth(p.get_sample_size(sample_format))
+    wf.setframerate(fs)
+    wf.writeframes(b''.join(frames))
+    wf.close()
 
-data = init_data()
+st.title('Help us gather audio data!')
 
-st.title('Is My Baby Heavy?')
+st.write('''We are trying to build a model that can idenify what letter of the alphabet was said
+by a speaker. Please help us gather some labeled data by recording yourself saying some letters.''')
 
-age, weight, sex = st.beta_columns((1,1,1))
+st.markdown('### Instructions')
+st.write(f'When you press record, you will be asked to say each letter {SAMPLES} times')
+st.write('Note that we are looking for the pronunciation of the letter, not the name.')
 
-with age:
-    baby_age = st.number_input('Baby age in months', min_value=0.0, max_value=36.0, step=0.25, value=2.0)
+FOLDER = st.text_input('Please give this dataset an identifier')
 
-with weight:
-    baby_weight = st.number_input('Baby weight in KG', min_value=0.0, max_value=12.0, step=0.01, value=6.0)
+button_cols = st.beta_columns(6)
 
-with sex:
-    baby_sex = st.selectbox('Baby sex', ['Male', 'Female'])
-
-dist = data.loc[(baby_sex, baby_age), 'Dist']
-
-st.success(f'{dist.to_percentile(baby_weight):.2%}')
-
-x = data.loc[lambda x: x.index.get_level_values('Sex') == baby_sex].loc[lambda x: x['Dist'].apply(lambda x: x.mean) >= baby_weight].index[0][1]
+with button_cols[0]:
+    start=st.button('Start')
+with button_cols[1]:
+    stop=st.button('Stop')
+with button_cols[2]:
+    review=st.button('Review')
+with button_cols[3]:
+    save=st.button('Save')
+with button_cols[4]:
+    clear=st.button('Clear')
+with button_cols[5]:
+    download=st.button('Download')
 
 
+if start:
+    os.makedirs(FOLDER, exist_ok=True)
 
-st.success(f'Your baby is heavier than an average {x} month old!')
+    for letter in string.ascii_uppercase:
+        st.markdown(f'### {letter}''')
+
+        time.sleep(1)
+        for i in range(SAMPLES):
+            col1, col2 = st.beta_columns(2)
+
+            with col1:
+                st.write('Start')
+
+            filename = f'{FOLDER}/{letter}-{str(i+1).rjust(4, "0")}.wav'
+            record(filename)
+            with col2:
+                st.write('Stop')
+            time.sleep(1)
+
+if review:
+    files = glob(f'{FOLDER}/*.wav')
+
+    cols = st.beta_columns(SAMPLES)
+
+    for i, file in enumerate(files):
+        with cols[i%SAMPLES] as c:
+            st.write(os.path.basename(file))
+            st.audio(file, format='audio/wav', start_time=0)
+
+
+if save:
+    zip_basename = f'{FOLDER}-{time.time():.0f}'
+    shutil.make_archive(zip_basename, 'zip', FOLDER)
+    st.write('Saved')
+
+if clear:
+    os.system(f'rm {FOLDER}/*')
+
+if download:
+    def get_download_link(filename)->str:
+        obj = open(filename, 'rb').read()
+        b64 = base64.b64encode(obj).decode()  # some strings <-> bytes conversions necessary here
+        href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download Zip File</a>'
+        return href
+
+    file =  sorted(glob(f'{FOLDER}-*.zip'))[-1]
+    st.markdown(get_download_link(file), unsafe_allow_html=True)
