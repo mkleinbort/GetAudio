@@ -8,8 +8,8 @@ from glob import glob
 import shutil
 import base64
 
-FOLDER  = 'user_recordings'
-SAMPLES = 2
+FOLDER_DEFAULT  = 'user_recordings'
+SAMPLES_DEFAULT = 2
 
 def record(filename):
     # KWARGs
@@ -52,11 +52,13 @@ st.title('Help us gather audio data!')
 st.write('''We are trying to build a model that can idenify what letter of the alphabet was said
 by a speaker. Please help us gather some labeled data by recording yourself saying some letters.''')
 
+
 st.markdown('### Instructions')
-st.write(f'When you press record, you will be asked to say each letter {SAMPLES} times')
+st.write(f'When you press record, you will be asked to say each letter {SAMPLES_DEFAULT}+ times')
 st.write('Note that we are looking for the pronunciation of the letter, not the name.')
 
-FOLDER = st.text_input('Please give this dataset an identifier')
+FOLDER = st.text_input('Please give this dataset an identifier', value=FOLDER_DEFAULT)
+SAMPLES = st.number_input('How many samples are you willing to record?', value=SAMPLES_DEFAULT, step=None,)
 
 button_cols = st.beta_columns(6)
 
@@ -121,3 +123,7 @@ if download:
 
     file =  sorted(glob(f'{FOLDER}-*.zip'))[-1]
     st.markdown(get_download_link(file), unsafe_allow_html=True)
+
+
+
+
