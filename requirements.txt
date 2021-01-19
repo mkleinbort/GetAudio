@@ -2,9 +2,6 @@ streamlit
 scipy
 pyaudio
 wave
-time
-os
-string
 glob
 shutil
 base64
