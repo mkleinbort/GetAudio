@@ -8,10 +8,14 @@ from glob import glob
 import shutil
 import base64
 
-FOLDER  = 'user_recordings'
-SAMPLES = 2
+FOLDER_DEFAULT  = 'user_recordings'
+SAMPLES_DEFAULT = 2
+EXCLUDE = ['C','Q','W','Y']
 
-def record(filename):
+p = pyaudio.PyAudio()  # Create an interface to PortAudio
+
+
+def record(filename, p, index):
     # KWARGs
     chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
@@ -19,17 +23,13 @@ def record(filename):
     fs = 16_000  # Record at 44100 samples per second
     seconds=1
     
-    p = pyaudio.PyAudio()  # Create an interface to PortAudio
-
-    print('A')
-
     stream = p.open(format=sample_format,
                         channels=2,
                         rate=fs,
                         frames_per_buffer=chunk,
+                        input_device_index = index,
                         input=True)
 
-    print("B")
     frames = []  # Initialize array to store frames
 
     # Store data in chunks
@@ -43,7 +43,6 @@ def record(filename):
     # Terminate the PortAudio interface
     #p.terminate()
 
-    print('X')
     # Save the recorded data as a WAV file
     wf = wave.open(filename, 'wb')
     wf.setnchannels(channels)
@@ -57,11 +56,23 @@ st.title('Help us gather audio data!')
 st.write('''We are trying to build a model that can idenify what letter of the alphabet was said
 by a speaker. Please help us gather some labeled data by recording yourself saying some letters.''')
 
+
 st.markdown('### Instructions')
-st.write(f'When you press record, you will be asked to say each letter {SAMPLES} times')
+st.write(f'When you press record, you will be asked to say each letter {SAMPLES_DEFAULT}+ times')
 st.write('Note that we are looking for the pronunciation of the letter, not the name.')
 
-FOLDER = st.text_input('Please give this dataset an identifier')
+n_devices = p.get_device_count()
+
+names = [p.get_device_info_by_index(i)['name'] 
+            for i in range(n_devices) 
+            if p.get_device_info_by_index(i)['maxInputChannels']==2
+        ]
+
+device_name = st.selectbox('Select your microphone', options=names)
+device_index = [i for i in range(n_devices) if p.get_device_info_by_index(i)['name']==device_name][0]
+
+FOLDER = st.text_input('Please give this dataset an identifier', value=FOLDER_DEFAULT)
+SAMPLES = st.number_input('How many samples are you willing to record?', value=SAMPLES_DEFAULT, step=None,)
 
 button_cols = st.beta_columns(6)
 
@@ -82,7 +93,7 @@ with button_cols[5]:
 if start:
     os.makedirs(FOLDER, exist_ok=True)
 
-    for letter in string.ascii_uppercase:
+    for letter in [letter for letter in string.ascii_uppercase if letter not in EXCLUDE]:
         st.markdown(f'### {letter}''')
 
         time.sleep(1)
@@ -93,7 +104,7 @@ if start:
                 st.write('Start')
 
             filename = f'{FOLDER}/{letter}-{str(i+1).rjust(4, "0")}.wav'
-            record(filename)
+            record(filename, p=p, index=int(device_index))
             with col2:
                 st.write('Stop')
             time.sleep(1)
@@ -126,6 +137,3 @@ if download:
 
     file =  sorted(glob(f'{FOLDER}-*.zip'))[-1]
     st.markdown(get_download_link(file), unsafe_allow_html=True)
-
-
-
