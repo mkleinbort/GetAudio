@@ -1,6 +1,1 @@
-streamlit
-scipy
 pyaudio
-wave
-shutil
-base64
